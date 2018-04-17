@@ -1,37 +1,28 @@
 /* Copyright 2016 Google Inc. All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+ http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-==============================================================================*/
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ ==============================================================================*/
 
 import * as nn from "./nn";
 import {HeatMap, reduceMatrix} from "./heatmap";
-import {
-  State,
-  datasets,
-  regDatasets,
-  activations,
-  problems,
-  regularizations,
-  getKeyFromValue,
-  Problem
-} from "./state";
+import {activations, datasets, getKeyFromValue, Problem, problems, regDatasets, regularizations, State} from "./state";
 import {Example2D, shuffle} from "./dataset";
 import {AppendingLineChart} from "./linechart";
 
 let mainWidth;
 
 // More scrolling
-d3.select(".more button").on("click", function() {
+d3.select(".more button").on("click", function () {
   let position = 800;
   d3.transition()
     .duration(1000)
@@ -39,10 +30,12 @@ d3.select(".more button").on("click", function() {
 });
 
 function scrollTween(offset) {
-  return function() {
+  return function () {
     let i = d3.interpolateNumber(window.pageYOffset ||
-        document.documentElement.scrollTop, offset);
-    return function(t) { scrollTo(0, i(t)); };
+      document.documentElement.scrollTop, offset);
+    return function (t) {
+      scrollTo(0, i(t));
+    };
   };
 }
 
@@ -61,11 +54,11 @@ interface InputFeature {
   label?: string;
 }
 
-let INPUTS: {[name: string]: InputFeature} = {
+let INPUTS: { [name: string]: InputFeature } = {
   "x": {f: (x, y) => x, label: "X_1"},
   "y": {f: (x, y) => y, label: "X_2"},
   "xSquared": {f: (x, y) => x * x, label: "X_1^2"},
-  "ySquared": {f: (x, y) => y * y,  label: "X_2^2"},
+  "ySquared": {f: (x, y) => y * y, label: "X_2^2"},
   "xTimesY": {f: (x, y) => x * y, label: "X_1X_2"},
   "sinX": {f: (x, y) => Math.sin(x), label: "sin(X_1)"},
   "sinY": {f: (x, y) => Math.sin(y), label: "sin(X_2)"},
@@ -149,21 +142,21 @@ state.getHiddenProps().forEach(prop => {
   }
 });
 
-let boundary: {[id: string]: number[][]} = {};
+let boundary: { [id: string]: number[][] } = {};
 let selectedNodeId: string = null;
 // Plot the heatmap.
 let xDomain: [number, number] = [-6, 6];
 let heatMap =
-    new HeatMap(300, DENSITY, xDomain, xDomain, d3.select("#heatmap"),
-        {showAxes: true});
+  new HeatMap(300, DENSITY, xDomain, xDomain, d3.select("#heatmap"),
+    {showAxes: true});
 let linkWidthScale = d3.scale.linear()
   .domain([0, 5])
   .range([1, 10])
   .clamp(true);
 let colorScale = d3.scale.linear<string>()
-                     .domain([-1, 0, 1])
-                     .range(["#f59322", "#e8eaeb", "#0877bd"])
-                     .clamp(true);
+  .domain([-1, 0, 1])
+  .range(["#f59322", "#e8eaeb", "#0877bd"])
+  .clamp(true);
 let iter = 0;
 let trainData: Example2D[] = [];
 let testData: Example2D[] = [];
@@ -172,7 +165,7 @@ let lossTrain = 0;
 let lossTest = 0;
 let player = new Player();
 let lineChart = new AppendingLineChart(d3.select("#linechart"),
-    ["#777", "black"]);
+  ["#777", "black"]);
 
 function makeGUI() {
   d3.select("#reset-button").on("click", () => {
@@ -205,13 +198,55 @@ function makeGUI() {
     parametersChanged = true;
   });
 
+  d3.select("#data-download-button").on("click", () => {
+    let content = "";
+
+    let numNodes = network[0].length;
+    content += '<inputNodes>\n';
+    for (let i = 0; i < numNodes; i++) {
+      let node = network[0][i];
+      content += node.toString() + '\n';
+    }
+    content += '</inputNodes>\n';
+
+    content += '<hiddenLayers>\n';
+    for (let layerIdx = 1; layerIdx < network.length; layerIdx++) {
+      numNodes = network[layerIdx].length;
+
+      for (let i = 0; i < numNodes; i++) {
+        let node = network[layerIdx][i];
+
+        content += node.toString() + '\n';
+      }
+    }
+    content += '</hiddenLayers>\n';
+
+    numNodes = network[network.length - 1].length;
+    content += '<outputNodes>\n';
+    for (let i = 0; i < numNodes; i++) {
+      let node = network[network.length - 1][i];
+      content += node.toString() + '\n';
+    }
+    content += '</outputNodes>\n';
+
+    let date = new Date();
+    let y = date.getFullYear();
+    let mo = (date.getMonth() < 10 ? '0' : '') + date.getMonth();
+    let h = (date.getHours() < 10 ? '0' : '') + date.getHours();
+    let mi = (date.getMinutes() < 10 ? '0' : '' ) + date.getMinutes();
+    let s = (date.getSeconds() < 10 ? '0' : '' ) + date.getSeconds();
+    let filename = 'data_' + y + '-' + mo + '-' + h + '-' + mi + '-' + s + '.txt';
+
+    download(filename, content);
+  });
+
   let dataThumbnails = d3.selectAll("canvas[data-dataset]");
-  dataThumbnails.on("click", function() {
+  dataThumbnails.on("click", function () {
     let newDataset = datasets[this.dataset.dataset];
     if (newDataset === state.dataset) {
       return; // No-op.
     }
-    state.dataset =  newDataset;
+    state.dataset = newDataset;
     dataThumbnails.classed("selected", false);
     d3.select(this).classed("selected", true);
     generateData();
@@ -220,17 +255,17 @@ function makeGUI() {
   });
 
   let datasetKey = getKeyFromValue(datasets, state.dataset);
-  // Select the dataset according to the current state.
+// Select the dataset according to the current state.
   d3.select(`canvas[data-dataset=${datasetKey}]`)
     .classed("selected", true);
 
   let regDataThumbnails = d3.selectAll("canvas[data-regDataset]");
-  regDataThumbnails.on("click", function() {
+  regDataThumbnails.on("click", function () {
     let newDataset = regDatasets[this.dataset.regdataset];
     if (newDataset === state.regDataset) {
       return; // No-op.
     }
-    state.regDataset =  newDataset;
+    state.regDataset = newDataset;
     regDataThumbnails.classed("selected", false);
     d3.select(this).classed("selected", true);
     generateData();
@@ -239,7 +274,7 @@ function makeGUI() {
   });
 
   let regDatasetKey = getKeyFromValue(regDatasets, state.regDataset);
-  // Select the dataset according to the current state.
+// Select the dataset according to the current state.
   d3.select(`canvas[data-regDataset=${regDatasetKey}]`)
     .classed("selected", true);
 
@@ -263,25 +298,25 @@ function makeGUI() {
     reset();
   });
 
-  let showTestData = d3.select("#show-test-data").on("change", function() {
+  let showTestData = d3.select("#show-test-data").on("change", function () {
     state.showTestData = this.checked;
     state.serialize();
     userHasInteracted();
     heatMap.updateTestPoints(state.showTestData ? testData : []);
   });
-  // Check/uncheck the checkbox according to the current state.
+// Check/uncheck the checkbox according to the current state.
   showTestData.property("checked", state.showTestData);
 
-  let discretize = d3.select("#discretize").on("change", function() {
+  let discretize = d3.select("#discretize").on("change", function () {
     state.discretize = this.checked;
     state.serialize();
     userHasInteracted();
     updateUI();
   });
-  // Check/uncheck the checbox according to the current state.
+// Check/uncheck the checbox according to the current state.
   discretize.property("checked", state.discretize);
 
-  let percTrain = d3.select("#percTrainData").on("input", function() {
+  let percTrain = d3.select("#percTrainData").on("input", function () {
     state.percTrainData = this.value;
     d3.select("label[for='percTrainData'] .value").text(this.value);
     generateData();
@@ -291,7 +326,7 @@ function makeGUI() {
   percTrain.property("value", state.percTrainData);
   d3.select("label[for='percTrainData'] .value").text(state.percTrainData);
 
-  let noise = d3.select("#noise").on("input", function() {
+  let noise = d3.select("#noise").on("input", function () {
     state.noise = this.value;
     d3.select("label[for='noise'] .value").text(this.value);
     generateData();
@@ -311,7 +346,7 @@ function makeGUI() {
   noise.property("value", state.noise);
   d3.select("label[for='noise'] .value").text(state.noise);
 
-  let batchSize = d3.select("#batchSize").on("input", function() {
+  let batchSize = d3.select("#batchSize").on("input", function () {
     state.batchSize = this.value;
     d3.select("label[for='batchSize'] .value").text(this.value);
     parametersChanged = true;
@@ -320,15 +355,15 @@ function makeGUI() {
   batchSize.property("value", state.batchSize);
   d3.select("label[for='batchSize'] .value").text(state.batchSize);
 
-  let activationDropdown = d3.select("#activations").on("change", function() {
+  let activationDropdown = d3.select("#activations").on("change", function () {
     state.activation = activations[this.value];
     parametersChanged = true;
     reset();
   });
   activationDropdown.property("value",
-      getKeyFromValue(activations, state.activation));
+    getKeyFromValue(activations, state.activation));
 
-  let learningRate = d3.select("#learningRate").on("change", function() {
+  let learningRate = d3.select("#learningRate").on("change", function () {
     state.learningRate = +this.value;
     state.serialize();
     userHasInteracted();
@@ -337,22 +372,22 @@ function makeGUI() {
   learningRate.property("value", state.learningRate);
 
   let regularDropdown = d3.select("#regularizations").on("change",
-      function() {
-    state.regularization = regularizations[this.value];
-    parametersChanged = true;
-    reset();
-  });
+    function () {
+      state.regularization = regularizations[this.value];
+      parametersChanged = true;
+      reset();
+    });
   regularDropdown.property("value",
-      getKeyFromValue(regularizations, state.regularization));
+    getKeyFromValue(regularizations, state.regularization));
 
-  let regularRate = d3.select("#regularRate").on("change", function() {
+  let regularRate = d3.select("#regularRate").on("change", function () {
     state.regularizationRate = +this.value;
     parametersChanged = true;
     reset();
   });
   regularRate.property("value", state.regularizationRate);
 
-  let problem = d3.select("#problem").on("change", function() {
+  let problem = d3.select("#problem").on("change", function () {
     state.problem = problems[this.value];
     generateData();
     drawDatasetThumbnails();
@@ -361,7 +396,7 @@ function makeGUI() {
   });
   problem.property("value", getKeyFromValue(problems, state.problem));
 
-  // Add scale to the gradient color map.
+// Add scale to the gradient color map.
   let x = d3.scale.linear().domain([-1, 1]).range([0, 144]);
   let xAxis = d3.svg.axis()
     .scale(x)
@@ -373,11 +408,11 @@ function makeGUI() {
     .attr("transform", "translate(0,10)")
     .call(xAxis);
 
-  // Listen for css-responsive changes and redraw the svg network.
+// Listen for css-responsive changes and redraw the svg network.
 
   window.addEventListener("resize", () => {
     let newWidth = document.querySelector("#main-part")
-        .getBoundingClientRect().width;
+      .getBoundingClientRect().width;
     if (newWidth !== mainWidth) {
       mainWidth = newWidth;
       drawNetwork(network);
@@ -385,7 +420,7 @@ function makeGUI() {
     }
   });
 
-  // Hide the text below the visualization depending on the URL.
+// Hide the text below the visualization depending on the URL.
   if (state.hideText) {
     d3.select("#article-text").style("display", "none");
     d3.select("div.more").style("display", "none");
@@ -408,19 +443,19 @@ function updateWeightsUI(network: nn.Node[][], container: d3.Selection<any>) {
       for (let j = 0; j < node.inputLinks.length; j++) {
         let link = node.inputLinks[j];
         container.select(`#link${link.source.id}-${link.dest.id}`)
-            .style({
-              "stroke-dashoffset": -iter / 3,
-              "stroke-width": linkWidthScale(Math.abs(link.weight)),
-              "stroke": colorScale(link.weight)
-            })
-            .datum(link);
+          .style({
+            "stroke-dashoffset": -iter / 3,
+            "stroke-width": linkWidthScale(Math.abs(link.weight)),
+            "stroke": colorScale(link.weight)
+          })
+          .datum(link);
       }
     }
   }
 }
 
 function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
-    container: d3.Selection<any>, node?: nn.Node) {
+                  container: d3.Selection<any>, node?: nn.Node) {
   let x = cx - RECT_SIZE / 2;
   let y = cy - RECT_SIZE / 2;
 
@@ -442,7 +477,7 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
   let activeOrNotClass = state[nodeId] ? "active" : "inactive";
   if (isInput) {
     let label = INPUTS[nodeId].label != null ?
-        INPUTS[nodeId].label : nodeId;
+      INPUTS[nodeId].label : nodeId;
     // Draw the input label.
     let text = nodeGroup.append("text").attr({
       class: "main-label",
@@ -462,9 +497,9 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
           text.append("tspan").text(prefix);
         }
         text.append("tspan")
-        .attr("baseline-shift", sep === "_" ? "sub" : "super")
-        .style("font-size", "9px")
-        .text(suffix);
+          .attr("baseline-shift", sep === "_" ? "sub" : "super")
+          .style("font-size", "9px")
+          .text(suffix);
       }
       if (label.substring(lastIndex)) {
         text.append("tspan").text(label.substring(lastIndex));
@@ -483,11 +518,11 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
         y: RECT_SIZE - BIAS_SIZE + 3,
         width: BIAS_SIZE,
         height: BIAS_SIZE,
-      }).on("mouseenter", function() {
-        updateHoverCard(HoverType.BIAS, node, d3.mouse(container.node()));
-      }).on("mouseleave", function() {
-        updateHoverCard(null);
-      });
+      }).on("mouseenter", function () {
+      updateHoverCard(HoverType.BIAS, node, d3.mouse(container.node()));
+    }).on("mouseleave", function () {
+      updateHoverCard(null);
+    });
   }
 
   // Draw the node's canvas.
@@ -501,23 +536,23 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
       left: `${x + 3}px`,
       top: `${y + 3}px`
     })
-    .on("mouseenter", function() {
+    .on("mouseenter", function () {
       selectedNodeId = nodeId;
       div.classed("hovered", true);
       nodeGroup.classed("hovered", true);
       updateDecisionBoundary(network, false);
       heatMap.updateBackground(boundary[nodeId], state.discretize);
     })
-    .on("mouseleave", function() {
+    .on("mouseleave", function () {
       selectedNodeId = null;
       div.classed("hovered", false);
       nodeGroup.classed("hovered", false);
       updateDecisionBoundary(network, false);
       heatMap.updateBackground(boundary[nn.getOutputNode(network).id],
-          state.discretize);
+        state.discretize);
     });
   if (isInput) {
-    div.on("click", function() {
+    div.on("click", function () {
       state[nodeId] = !state[nodeId];
       parametersChanged = true;
       reset();
@@ -528,7 +563,7 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
     div.classed(activeOrNotClass, true);
   }
   let nodeHeatMap = new HeatMap(RECT_SIZE, DENSITY / 10, xDomain,
-      xDomain, div, {noSvg: true});
+    xDomain, div, {noSvg: true});
   div.datum({heatmap: nodeHeatMap, id: nodeId});
 
 }
@@ -550,7 +585,7 @@ function drawNetwork(network: nn.Node[][]): void {
   svg.attr("width", width);
 
   // Map of all node coordinates.
-  let node2coord: {[id: string]: {cx: number, cy: number}} = {};
+  let node2coord: { [id: string]: { cx: number, cy: number } } = {};
   let container = svg.append("g")
     .classed("core", true)
     .attr("transform", `translate(${padding},${padding})`);
@@ -558,8 +593,8 @@ function drawNetwork(network: nn.Node[][]): void {
   let numLayers = network.length;
   let featureWidth = 118;
   let layerScale = d3.scale.ordinal<number, number>()
-      .domain(d3.range(1, numLayers - 1))
-      .rangePoints([featureWidth, width - RECT_SIZE], 0.7);
+    .domain(d3.range(1, numLayers - 1))
+    .rangePoints([featureWidth, width - RECT_SIZE], 0.7);
   let nodeIndexScale = (nodeIndex: number) => nodeIndex * (RECT_SIZE + 25);
 
 
@@ -594,8 +629,8 @@ function drawNetwork(network: nn.Node[][]): void {
       let numNodes = network[layerIdx].length;
       let nextNumNodes = network[layerIdx + 1].length;
       if (idWithCallout == null &&
-          i === numNodes - 1 &&
-          nextNumNodes <= numNodes) {
+        i === numNodes - 1 &&
+        nextNumNodes <= numNodes) {
         calloutThumb.style({
           display: null,
           top: `${20 + 3 + cy}px`,
@@ -608,16 +643,16 @@ function drawNetwork(network: nn.Node[][]): void {
       for (let j = 0; j < node.inputLinks.length; j++) {
         let link = node.inputLinks[j];
         let path: SVGPathElement = drawLink(link, node2coord, network,
-            container, j === 0, j, node.inputLinks.length).node() as any;
+          container, j === 0, j, node.inputLinks.length).node() as any;
         // Show callout to weights.
         let prevLayer = network[layerIdx - 1];
         let lastNodePrevLayer = prevLayer[prevLayer.length - 1];
         if (targetIdWithCallout == null &&
-            i === numNodes - 1 &&
-            link.source.id === lastNodePrevLayer.id &&
-            (link.source.id !== idWithCallout || numLayers <= 5) &&
-            link.dest.id !== idWithCallout &&
-            prevLayer.length >= numNodes) {
+          i === numNodes - 1 &&
+          link.source.id === lastNodePrevLayer.id &&
+          (link.source.id !== idWithCallout || numLayers <= 5) &&
+          link.dest.id !== idWithCallout &&
+          prevLayer.length >= numNodes) {
           let midPoint = path.getPointAtLength(path.getTotalLength() * 0.7);
           calloutWeights.style({
             display: null,
@@ -639,7 +674,7 @@ function drawNetwork(network: nn.Node[][]): void {
   for (let i = 0; i < node.inputLinks.length; i++) {
     let link = node.inputLinks[i];
     drawLink(link, node2coord, network, container, i === 0, i,
-        node.inputLinks.length);
+      node.inputLinks.length);
   }
   // Adjust the height of the svg.
   svg.attr("height", maxY);
@@ -666,34 +701,34 @@ function addPlusMinusControl(x: number, layerIdx: number) {
   let i = layerIdx - 1;
   let firstRow = div.append("div").attr("class", `ui-numNodes${layerIdx}`);
   firstRow.append("button")
-      .attr("class", "mdl-button mdl-js-button mdl-button--icon")
-      .on("click", () => {
-        let numNeurons = state.networkShape[i];
-        if (numNeurons >= 8) {
-          return;
-        }
-        state.networkShape[i]++;
-        parametersChanged = true;
-        reset();
-      })
+    .attr("class", "mdl-button mdl-js-button mdl-button--icon")
+    .on("click", () => {
+      let numNeurons = state.networkShape[i];
+      if (numNeurons >= 8) {
+        return;
+      }
+      state.networkShape[i]++;
+      parametersChanged = true;
+      reset();
+    })
     .append("i")
-      .attr("class", "material-icons")
-      .text("add");
+    .attr("class", "material-icons")
+    .text("add");
 
   firstRow.append("button")
-      .attr("class", "mdl-button mdl-js-button mdl-button--icon")
-      .on("click", () => {
-        let numNeurons = state.networkShape[i];
-        if (numNeurons <= 1) {
-          return;
-        }
-        state.networkShape[i]--;
-        parametersChanged = true;
-        reset();
-      })
+    .attr("class", "mdl-button mdl-js-button mdl-button--icon")
+    .on("click", () => {
+      let numNeurons = state.networkShape[i];
+      if (numNeurons <= 1) {
+        return;
+      }
+      state.networkShape[i]--;
+      parametersChanged = true;
+      reset();
+    })
     .append("i")
-      .attr("class", "material-icons")
-      .text("remove");
+    .attr("class", "material-icons")
+    .text("remove");
 
   let suffix = state.networkShape[i] > 1 ? "s" : "";
   div.append("div").text(
@@ -702,7 +737,7 @@ function addPlusMinusControl(x: number, layerIdx: number) {
 }
 
 function updateHoverCard(type: HoverType, nodeOrLink?: nn.Node | nn.Link,
-    coordinates?: [number, number]) {
+                         coordinates?: [number, number]) {
   let hovercard = d3.select("#hovercard");
   if (type == null) {
     hovercard.style("display", "none");
@@ -713,7 +748,7 @@ function updateHoverCard(type: HoverType, nodeOrLink?: nn.Node | nn.Link,
     hovercard.select(".value").style("display", "none");
     let input = hovercard.select("input");
     input.style("display", null);
-    input.on("input", function() {
+    input.on("input", function () {
       if (this.value != null && this.value !== "") {
         if (type === HoverType.WEIGHT) {
           (nodeOrLink as nn.Link).weight = +this.value;
@@ -748,10 +783,9 @@ function updateHoverCard(type: HoverType, nodeOrLink?: nn.Node | nn.Link,
     .style("display", "none");
 }
 
-function drawLink(
-    input: nn.Link, node2coord: {[id: string]: {cx: number, cy: number}},
-    network: nn.Node[][], container: d3.Selection<any>,
-    isFirst: boolean, index: number, length: number) {
+function drawLink(input: nn.Link, node2coord: { [id: string]: { cx: number, cy: number } },
+                  network: nn.Node[][], container: d3.Selection<any>,
+                  isFirst: boolean, index: number, length: number) {
   let line = container.insert("path", ":first-child");
   let source = node2coord[input.source.id];
   let dest = node2coord[input.dest.id];
@@ -778,11 +812,11 @@ function drawLink(
   container.append("path")
     .attr("d", diagonal(datum, 0))
     .attr("class", "link-hover")
-    .on("mouseenter", function() {
+    .on("mouseenter", function () {
       updateHoverCard(HoverType.WEIGHT, input, d3.mouse(this));
-    }).on("mouseleave", function() {
-      updateHoverCard(null);
-    });
+    }).on("mouseleave", function () {
+    updateHoverCard(null);
+  });
   return line;
 }
 
@@ -855,15 +889,15 @@ function updateUI(firstStep = false) {
   // Get the decision boundary of the network.
   updateDecisionBoundary(network, firstStep);
   let selectedId = selectedNodeId != null ?
-      selectedNodeId : nn.getOutputNode(network).id;
+    selectedNodeId : nn.getOutputNode(network).id;
   heatMap.updateBackground(boundary[selectedId], state.discretize);
 
   // Update all decision boundaries.
   d3.select("#network").selectAll("div.canvas")
-      .each(function(data: {heatmap: HeatMap, id: string}) {
-    data.heatmap.updateBackground(reduceMatrix(boundary[data.id], 10),
+    .each(function (data: { heatmap: HeatMap, id: string }) {
+      data.heatmap.updateBackground(reduceMatrix(boundary[data.id], 10),
         state.discretize);
-  });
+    });
 
   function zeroPad(n: number): string {
     let pad = "000000";
@@ -936,7 +970,7 @@ export function getOutputWeights(network: nn.Node[][]): number[] {
   return weights;
 }
 
-function reset(onStartup=false) {
+function reset(onStartup = false) {
   lineChart.reset();
   state.serialize();
   if (!onStartup) {
@@ -950,12 +984,12 @@ function reset(onStartup=false) {
 
   // Make a simple network.
   iter = 0;
-  let numInputs = constructInput(0 , 0).length;
+  let numInputs = constructInput(0, 0).length;
   let shape = [numInputs].concat(state.networkShape).concat([1]);
   let outputActivation = (state.problem === Problem.REGRESSION) ?
-      nn.Activations.LINEAR : nn.Activations.TANH;
+    nn.Activations.LINEAR : nn.Activations.TANH;
   network = nn.buildNetwork(shape, state.activation, outputActivation,
-      state.regularization, constructInputIds(), state.initZero);
+    state.regularization, constructInputIds(), state.initZero);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
   drawNetwork(network);
@@ -983,7 +1017,7 @@ function initTutorial() {
         "margin-top": "20px",
         "margin-bottom": "20px",
       })
-      .text(title.text());
+        .text(title.text());
       document.title = title.text();
     }
   });
@@ -997,18 +1031,19 @@ function drawDatasetThumbnails() {
     canvas.setAttribute("height", h);
     let context = canvas.getContext("2d");
     let data = dataGenerator(200, 0);
-    data.forEach(function(d) {
+    data.forEach(function (d) {
       context.fillStyle = colorScale(d.label);
       context.fillRect(w * (d.x + 6) / 12, h * (d.y + 6) / 12, 4, 4);
     });
     d3.select(canvas.parentNode).style("display", null);
   }
+
   d3.selectAll(".dataset").style("display", "none");
 
   if (state.problem === Problem.CLASSIFICATION) {
     for (let dataset in datasets) {
       let canvas: any =
-          document.querySelector(`canvas[data-dataset=${dataset}]`);
+        document.querySelector(`canvas[data-dataset=${dataset}]`);
       let dataGenerator = datasets[dataset];
       renderThumbnail(canvas, dataGenerator);
     }
@@ -1016,7 +1051,7 @@ function drawDatasetThumbnails() {
   if (state.problem === Problem.REGRESSION) {
     for (let regDataset in regDatasets) {
       let canvas: any =
-          document.querySelector(`canvas[data-regDataset=${regDataset}]`);
+        document.querySelector(`canvas[data-regDataset=${regDataset}]`);
       let dataGenerator = regDatasets[regDataset];
       renderThumbnail(canvas, dataGenerator);
     }
@@ -1048,7 +1083,7 @@ function hideControls() {
     if (hiddenProps.indexOf(id) === -1) {
       input.attr("checked", "true");
     }
-    input.on("change", function() {
+    input.on("change", function () {
       state.setHideProperty(id, !this.checked);
       state.serialize();
       userHasInteracted();
@@ -1072,9 +1107,9 @@ function generateData(firstTime = false) {
   }
   Math.seedrandom(state.seed);
   let numSamples = (state.problem === Problem.REGRESSION) ?
-      NUM_SAMPLES_REGRESS : NUM_SAMPLES_CLASSIFY;
+    NUM_SAMPLES_REGRESS : NUM_SAMPLES_CLASSIFY;
   let generator = state.problem === Problem.CLASSIFICATION ?
-      state.dataset : state.regDataset;
+    state.dataset : state.regDataset;
   let data = generator(numSamples, state.noise / 100);
   // Shuffle the data in-place.
   shuffle(data);
@@ -1097,19 +1132,33 @@ function userHasInteracted() {
   let page = 'index';
   if (state.tutorial != null && state.tutorial !== '') {
     page = `/v/tutorials/${state.tutorial}`;
-  }/*
-  ga('set', 'page', page);
-  ga('send', 'pageview', {'sessionControl': 'start'});*/
+  }
+  /*
+   ga('set', 'page', page);
+   ga('send', 'pageview', {'sessionControl': 'start'});*/
 }
 
 function simulationStarted() {
   /*ga('send', {
-    hitType: 'event',
-    eventCategory: 'Starting Simulation',
-    eventAction: parametersChanged ? 'changed' : 'unchanged',
-    eventLabel: state.tutorial == null ? '' : state.tutorial
-  });*/
+   hitType: 'event',
+   eventCategory: 'Starting Simulation',
+   eventAction: parametersChanged ? 'changed' : 'unchanged',
+   eventLabel: state.tutorial == null ? '' : state.tutorial
+   });*/
   parametersChanged = false;
+}
+
+function download(filename, text) {
+  let element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+
+  element.style.display = 'none';
+  document.body.appendChild(element);
+
+  element.click();
+
+  document.body.removeChild(element);
 }
 
 drawDatasetThumbnails();
